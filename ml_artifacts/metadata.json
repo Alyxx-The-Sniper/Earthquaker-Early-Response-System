@@ -1,0 +1,43 @@
+{
+  "model_version": "1.0.0",
+  "model_type": "XGBoost Pipeline",
+  "class_weights_applied": true,
+  "description": "Earthquake structural damage classification model. Features class weighting to prioritize recall on severe damage.",
+  
+  "expected_features": {
+    "numeric": [
+      { "name": "year_built", "type": "int", "min": 1900, "max": 2026 },
+      { "name": "floors", "type": "int", "min": 1, "max": 100 },
+      { "name": "vs30", "type": "int", "min": 100, "max": 1500, "description": "Soil shear-wave velocity (m/s)" },
+      { "name": "magnitude", "type": "float", "min": 1.0, "max": 10.0 },
+      { "name": "dist_km", "type": "float", "min": 0.0, "max": 1000.0 },
+      { "name": "pga_g", "type": "float", "min": 0.0, "max": 3.0, "description": "Peak Ground Acceleration" },
+      { "name": "pgv_cms", "type": "float", "min": 0.0, "max": 300.0, "description": "Peak Ground Velocity" }
+    ],
+    "categorical": [
+      {
+        "name": "barangay",
+        "type": "string",
+        "allowed_values": ["San Roque", "Dela Paz", "Cupang", "Mayamot", "San Isidro", "Dalig", "San Jose", "San Juan", "Inarawan", "Muntindilaw", "San Luis", "Bagong Nayon"]
+      },
+      {
+        "name": "material",
+        "type": "string",
+        "allowed_values": ["Concrete", "Wood", "Masonry_URM", "Steel"]
+      },
+      {
+        "name": "occupancy",
+        "type": "string",
+        "allowed_values": ["Residential", "Commercial", "School", "Hospital", "Industrial"]
+      }
+    ]
+  },
+  
+  "target_mapping": {
+    "0": "Class 0: No Damage",
+    "1": "Class 1: Light Damage",
+    "2": "Class 2: Moderate Damage",
+    "3": "Class 3: Severe Damage",
+    "4": "Class 4: Collapse"
+  }
+}

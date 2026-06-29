@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake Damage Simulator</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha26-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #map { min-height: 600px; height: 100%; }
+        #results table tbody tr:nth-child(odd)  { background: #ffffff; }
+        #results table tbody tr:nth-child(even) { background: #f9f9f9; }
+        #results table tbody td                 { color: #111827; }     
+        #results table tbody tr:hover td        { background: #e5e7eb; } 
+        #results table thead th                 { background: #1f2937; } 
+    </style>
+    
+    <script>
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'], } } } }
+    </script>
+</head>
+
+<body class="bg-slate-900 text-slate-300 font-sans antialiased min-h-screen">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-10 mt-4">
+            <h1 class="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-teal-400 to-blue-500 pb-2">
+                Earthquake Early Response Simulator
+            </h1>
+            <p class="text-lg text-slate-400 mt-2">Visualize predicted damage dynamically based on epicenter and magnitude.</p>
+        </header>
+
+        <div class="bg-slate-800 border border-slate-700 rounded-xl shadow-lg p-6 mb-8 max-w-4xl mx-auto">
+            <h3 class="text-xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Simulation Parameters</h3>
+            <label class="block text-sm font-medium text-slate-400 mb-1">Sample Lat range: 14.55 to 14.65, Lon range: 121.10 to 121.20</label>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">Magnitude</label>
+                    <input type="number" id="magInput" step="0.1" value="7.2" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">Epicenter Latitude</label>
+                    <input type="number" id="latInput" step="0.001" value="14.610" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">Epicenter Longitude</label>
+                    <input type="number" id="lonInput" step="0.001" value="121.120" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <button id="simulateBtn" class="bg-gradient-to-r from-teal-400 to-blue-500 text-white font-bold py-3 px-10 rounded-lg shadow-lg shadow-blue-500/30 hover:from-teal-500 hover:to-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300/50 transition-all duration-300 transform hover:scale-105">
+                    Run Simulation
+                </button>
+            </div>
+        </div>
+        
+        <div id="results" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <div class="lg:col-span-6 bg-slate-800/50 border border-slate-700 p-6 rounded-xl shadow-lg flex flex-col">
+                    <h2 class="text-2xl font-semibold mb-4 text-white">Affected Area Data</h2>
+                    <div class="overflow-auto flex-grow rounded-lg" style="max-height: 600px;">
+                        <table class="min-w-full divide-y divide-slate-700">
+                            <thead class="bg-slate-800 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Bldg ID / Brgy</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Dist (km)</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">PGA (g)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody" class="bg-slate-800/50 divide-y divide-slate-700"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-6 bg-slate-800/50 border border-slate-700 p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-semibold mb-4 text-white">Damage Visualization Map</h2>
+                    <div id="map" class="rounded-lg z-0 border border-slate-700 w-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="no-results" class="text-center py-12">
+            <p class="text-slate-500">Adjust parameters above and click Run Simulation.</p>
+        </div>
+        <!-- Real-World Impact Section -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-xl shadow-lg p-6 md:p-8 mt-12 mb-12">
+            <h2 class="text-3xl font-bold text-center text-white mb-8">Real-World Impact: Saving Lives in an Instant</h2>
+            <div class="grid md:grid-cols-3 gap-6 text-center">
+                
+                <div class="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-teal-500 transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="flex justify-center items-center mx-auto bg-gradient-to-br from-teal-500 to-blue-600 rounded-full w-16 h-16 mb-4 shadow-lg shadow-teal-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-lg text-white mb-2">Enable Rapid Response</h3>
+                    <p class="text-slate-400 text-sm">Instantly identify potential damage hotspots, allowing authorities to dispatch rescue teams in minutes.</p>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-teal-500 transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="flex justify-center items-center mx-auto bg-gradient-to-br from-teal-500 to-blue-600 rounded-full w-16 h-16 mb-4 shadow-lg shadow-teal-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                           <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                           <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h8a1 1 0 001-1zM3 11h10" />
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-lg text-white mb-2">Optimize Resource Deployment</h3>
+                    <p class="text-slate-400 text-sm">Strategically send medical personnel, engineers, and supplies to the areas with the greatest predicted need.</p>
+                </div>
+
+                <div class="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-teal-500 transition-all duration-300 transform hover:-translate-y-1">
+                    <div class="flex justify-center items-center mx-auto bg-gradient-to-br from-teal-500 to-blue-600 rounded-full w-16 h-16 mb-4 shadow-lg shadow-teal-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                           <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-lg text-white mb-2">Prioritize and Save Lives</h3>
+                    <p class="text-slate-400 text-sm">By providing an immediate overview of impacted zones, this tool helps focus rescue efforts where they matter most.</p>
+                </div>
+            </div>
+            <label class="block text-sm font-medium text-slate-400 mb-1">Disclaimer: This is Eathquake impact is a visual approximation only. Real radius is not based on magnitude only, but it's also depends on depth, soil, fault type, and local geology. But for our demo, this makes the epicenter radius much more realistic-looking than a fixed circle.</label>
+        </div>
+
+    </div>
+
+    <script>
+        // ---------- 1. BASE BUILDING DATA ----------
+        // Notice: PGA and Distance are removed from here. We calculate them live now!
+        const baseBuildingData = [
+            { bldg_id: "ANT-001", latitude: 14.598, longitude: 121.176, year_built: 2010, floors: 5, material: "Concrete", occupancy: "Commercial", vs30: 450, barangay: "San Roque" },
+            { bldg_id: "ANT-002", latitude: 14.613, longitude: 121.144, year_built: 1980, floors: 2, material: "Masonry_URM", occupancy: "Residential", vs30: 250, barangay: "Mayamot" },
+            { bldg_id: "ANT-003", latitude: 14.630, longitude: 121.130, year_built: 2020, floors: 15, material: "Steel", occupancy: "Commercial", vs30: 760, barangay: "Cupang" },
+            { bldg_id: "ANT-004", latitude: 14.580, longitude: 121.185, year_built: 1995, floors: 1, material: "Wood", occupancy: "Residential", vs30: 300, barangay: "Dela Paz" },
+            { bldg_id: "ANT-005", latitude: 14.565, longitude: 121.168, year_built: 2005, floors: 4, material: "Concrete", occupancy: "School", vs30: 400, barangay: "Dalig" },
+            { bldg_id: "ANT-006", latitude: 14.620, longitude: 121.155, year_built: 1975, floors: 2, material: "Masonry_URM", occupancy: "Residential", vs30: 250, barangay: "San Isidro" },
+            { bldg_id: "ANT-007", latitude: 14.605, longitude: 121.180, year_built: 2018, floors: 3, material: "Concrete", occupancy: "Hospital", vs30: 500, barangay: "San Roque" },
+            { bldg_id: "ANT-008", latitude: 14.590, longitude: 121.200, year_built: 1988, floors: 1, material: "Wood", occupancy: "Residential", vs30: 350, barangay: "San Jose" },
+            { bldg_id: "ANT-009", latitude: 14.625, longitude: 121.135, year_built: 2015, floors: 6, material: "Steel", occupancy: "Commercial", vs30: 600, barangay: "Cupang" },
+            { bldg_id: "ANT-010", latitude: 14.610, longitude: 121.160, year_built: 1960, floors: 2, material: "Masonry_URM", occupancy: "Commercial", vs30: 200, barangay: "Mayamot" }
+        ];
+
+        // ---------- 2. LIVE PHYSICS ENGINE ----------
+        // Calculates distance between Epicenter and Building
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Calculates PGA based on Magnitude, Distance, and Soil Type (Vs30)
+        function calculatePGA(magnitude, distanceKm, vs30) {
+            let pga = Math.exp(0.8 * magnitude) / Math.pow(distanceKm + 10, 1.5);
+            pga = pga * Math.pow(760 / vs30, 0.3); // Soil amplification
+            return parseFloat(pga.toFixed(3));
+        }
+
+        // Creates visual impact zones around the epicenter based on magnitude.
+        // Note: This is a simplified visual approximation for demo use.
+        // Real earthquake impact also depends on depth, fault type, soil, and local geology.
+        function getEpicenterImpactZones(magnitude) {
+            const safeMagnitude = Number.isFinite(magnitude)
+                ? Math.min(Math.max(magnitude, 3.0), 9.0)
+                : 3.0;
+
+            // Exponential scaling: each +1 magnitude roughly doubles the displayed radius.
+            // Example: M4 red zone ~= 1 km, M5 ~= 2 km, M6 ~= 4 km, M7 ~= 8 km, M8 ~= 16 km.
+            const severeRadiusKm = Math.pow(2, safeMagnitude - 4);
+
+            return [
+                {
+                    name: 'Severe shaking zone',
+                    radiusKm: severeRadiusKm,
+                    color: '#ef4444',
+                    fillOpacity: 0.14,
+                    weight: 2
+                },
+                {
+                    name: 'Moderate shaking zone',
+                    radiusKm: severeRadiusKm * 2,
+                    color: '#f97316',
+                    fillOpacity: 0.08,
+                    weight: 2
+                },
+                {
+                    name: 'Light shaking zone',
+                    radiusKm: severeRadiusKm * 4,
+                    color: '#facc15',
+                    fillOpacity: 0.04,
+                    weight: 1
+                }
+            ];
+        }
+
+        function mockPredict(data) {
+            const age = 2026 - (data.year_built || 2026);
+            let score = data.pga_g * 10;
+            if (data.material === "Masonry_URM") score *= 1.5;
+            if (age > 40) score *= 1.3;
+                
+            if (score >= 8.0) return "Class 4: Collapse";
+            if (score >= 5.0) return "Class 3: Severe Damage";
+            if (score >= 2.5) return "Class 2: Moderate Damage";
+            if (score >= 1.0) return "Class 1: Light Damage";
+            return "Class 0: No Damage";
+        }
+
+        async function getPredictionFromAPI(building) {
+            await new Promise(resolve => setTimeout(resolve, 50)); // Fast UI delay
+            const predicted_damage = mockPredict(building);
+            return { ...building, Predicted_Damage: predicted_damage };
+        }
+
+        const colorMap = {
+            'Class 0: No Damage': '#22c55e', 
+            'Class 1: Light Damage': '#84cc16', 
+            'Class 2: Moderate Damage': '#f97316',
+            'Class 3: Severe Damage': '#ef4444', 
+            'Class 4: Collapse': '#171717'
+        };
+
+        // ---------- 3. RENDER LOGIC ----------
+        document.addEventListener('DOMContentLoaded', () => {
+            const simulateBtn = document.getElementById('simulateBtn');
+            const tableBody = document.getElementById('resultsTableBody');
+            let map;
+            let epicenterMarker;
+            let epicenterRings = [];
+            const markerStore = {};
+
+            simulateBtn.addEventListener('click', async () => {
+                simulateBtn.disabled = true;
+                simulateBtn.innerHTML = '<span class="animate-pulse">Processing Event...</span>';
+                
+                // Get User Inputs
+                const currentMag = parseFloat(document.getElementById('magInput').value);
+                const epiLat = parseFloat(document.getElementById('latInput').value);
+                const epiLon = parseFloat(document.getElementById('lonInput').value);
+
+                // Dynamically build the current event dataset
+                const liveData = baseBuildingData.map(bldg => {
+                    const dist = calculateHaversineDistance(bldg.latitude, bldg.longitude, epiLat, epiLon);
+                    const pga = calculatePGA(currentMag, dist, bldg.vs30);
+                    return { ...bldg, dist_km: parseFloat(dist.toFixed(2)), pga_g: pga };
+                });
+
+                const preds = await Promise.all(liveData.map(getPredictionFromAPI));
+                
+                buildTable(preds);
+                buildMap(preds, epiLat, epiLon, currentMag);
+                
+                document.getElementById('results').classList.remove('hidden');
+                document.getElementById('no-results').classList.add('hidden');
+                setTimeout(() => { map.invalidateSize(); }, 200);
+                
+                simulateBtn.disabled = false;
+                simulateBtn.textContent = 'Run Simulation';
+            });
+
+            function buildTable(data) {
+                tableBody.innerHTML = '';
+                data.forEach(it => {
+                    const tr = document.createElement('tr');
+                    tr.id = `row-${it.bldg_id}`;
+                    tr.className = 'cursor-pointer transition-colors duration-200';
+                    tr.innerHTML = `
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-bold" style="color:${colorMap[it.Predicted_Damage]}">
+                            ${it.Predicted_Damage.replace('Class ', 'C')}
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <span class="font-mono text-xs block text-slate-500">${it.bldg_id}</span>
+                            ${it.barangay}
+                        </td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">${it.dist_km}</td>
+                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">${it.pga_g}</td>`;
+                    tableBody.appendChild(tr);
+                });
+                
+                tableBody.onclick = e => {
+                    const tr = e.target.closest('tr');
+                    if (!tr || !tr.id.startsWith('row-')) return;
+                    const id = tr.id.slice(4);
+                    const {marker} = markerStore[id] || {};
+                    if (!marker) return;
+                    
+                    map.flyTo(marker.getLatLng(), 16, {animate: true, duration: 1.2});
+                    marker.openPopup();
+                    marker.setStyle({weight: 5, color: '#0ea5e9', radius: 12});
+                    setTimeout(() => marker.setStyle({weight: 2, color: '#ffffff', radius: 8}), 1200);
+                };
+            }
+
+            function buildMap(data, epiLat, epiLon, mag) {
+                if (map) {
+                    Object.values(markerStore).forEach(m => map.removeLayer(m.marker));
+                    Object.values(markerStore).forEach(m => { if (m.halo) map.removeLayer(m.halo); });
+                    if (epicenterMarker) map.removeLayer(epicenterMarker);
+                    epicenterRings.forEach(ring => map.removeLayer(ring));
+                    epicenterRings = [];
+                } else {
+                    map = L.map('map').setView([14.61, 121.15], 12);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap'
+                    }).addTo(map);
+                }
+                
+                Object.keys(markerStore).forEach(k => delete markerStore[k]);
+
+                // DRAW MAGNITUDE-BASED EPICENTER IMPACT ZONES
+                const impactZones = getEpicenterImpactZones(mag);
+
+                // Draw largest zone first so smaller / stronger zones stay visible on top.
+                [...impactZones].reverse().forEach(zone => {
+                    const ring = L.circle([epiLat, epiLon], {
+                        radius: zone.radiusKm * 1000, // Leaflet radius is in meters
+                        color: zone.color,
+                        fillColor: zone.color,
+                        fillOpacity: zone.fillOpacity,
+                        weight: zone.weight
+                    }).bindPopup(`
+                        <div class="font-sans text-center">
+                            <b>${zone.name}</b><br>
+                            Magnitude: ${mag}<br>
+                            Radius: ${zone.radiusKm.toFixed(1)} km
+                        </div>
+                    `).addTo(map);
+
+                    epicenterRings.push(ring);
+                });
+
+                // DRAW EPICENTER CENTER MARKER
+                epicenterMarker = L.circleMarker([epiLat, epiLon], {
+                    radius: Math.max(10, mag * 2),
+                    color: '#000',
+                    weight: 3,
+                    fillColor: '#ff0000',
+                    fillOpacity: 1.0,
+                    dashArray: '4'
+                }).bindPopup(`
+                    <div class="font-sans font-bold text-red-600 text-center">
+                        EPICENTER<br>
+                        Magnitude: ${mag}<br>
+                        ${impactZones.map(zone => `${zone.name}: ${zone.radiusKm.toFixed(1)} km`).join('<br>')}
+                    </div>
+                `).addTo(map);
+
+                // DRAW BUILDINGS
+                data.forEach(it => {
+                    const color = colorMap[it.Predicted_Damage] || '#000';
+                    const marker = L.circleMarker([it.latitude, it.longitude], {
+                        radius: 8, color: '#ffffff', weight: 2, fillColor: color, fillOpacity: 1.0
+                    }).bindPopup(
+                        `<div class="font-sans">
+                            <b class="text-sm">Bldg ID:</b> ${it.bldg_id}<br>
+                            <b class="text-sm">Status:</b> <span style="color:${color}">${it.Predicted_Damage}</span><br>
+                            <b class="text-sm">Dist to Quake:</b> ${it.dist_km} km<br>
+                            <b class="text-sm">Local Shaking:</b> ${it.pga_g}g
+                        </div>`
+                    ).addTo(map);
+
+                    let halo;
+                    if (it.Predicted_Damage.includes('Severe') || it.Predicted_Damage.includes('Collapse')) {
+                        halo = L.circle([it.latitude, it.longitude], {
+                            radius: 350, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.15, weight: 1, dashArray: '4'
+                        }).addTo(map);
+                    }
+                    markerStore[it.bldg_id] = {marker, halo};
+                });
+            }
+        });
+    </script>
+</body>
+</html>

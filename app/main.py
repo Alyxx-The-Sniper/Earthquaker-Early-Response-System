@@ -23,11 +23,11 @@ async def root():
 
 
 
-### Deploying to railway using dockerfile ##
-import os
+# ### Deploying to railway using dockerfile ##
+# import os
 
-if __name__ == "__main__":
-    import uvicorn
-    # Railway assigns a dynamic PORT. Fallback to 8000 for local testing.
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+# if __name__ == "__main__":
+#     import uvicorn
+#     # Railway assigns a dynamic PORT. Fallback to 8000 for local testing.
+#     port = int(os.environ.get("PORT", 8000))
+#     uvicorn.run(app, host="0.0.0.0", port=port)
